@@ -1,0 +1,46 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { SITE } from '../config';
+import { Content } from '../content/cv.md';
+---
+
+<BaseLayout title="CV" description={`Curriculum vitae of ${SITE.name}.`}>
+  <div class="cv-head">
+    <h1>Curriculum Vitae</h1>
+    {SITE.cvPdf && <a class="download" href={SITE.cvPdf}>Download PDF</a>}
+  </div>
+  <div class="prose cv">
+    <Content />
+  </div>
+</BaseLayout>
+
+<style>
+  .cv-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+  }
+
+  .download {
+    font-size: 0.9rem;
+  }
+
+  .cv :global(h2) {
+    font-size: 1.2rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.3rem;
+  }
+
+  .cv :global(h3) {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    margin-bottom: 0.1rem;
+  }
+
+  .cv :global(h3 + p) {
+    color: var(--muted);
+    font-size: 0.95rem;
+  }
+</style>

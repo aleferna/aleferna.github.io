@@ -1,0 +1,39 @@
+---
+import { SITE, SOCIAL } from '../config';
+
+const links = [
+  { label: 'Email', href: SITE.email ? `mailto:${SITE.email}` : '' },
+  { label: 'GitHub', href: SOCIAL.github },
+  { label: 'Google Scholar', href: SOCIAL.scholar },
+  { label: 'ORCID', href: SOCIAL.orcid },
+  { label: 'LinkedIn', href: SOCIAL.linkedin },
+  { label: 'Bluesky', href: SOCIAL.bluesky },
+].filter((link) => link.href);
+---
+
+<ul class="social">
+  {
+    links.map(({ label, href }) => (
+      <li>
+        <a href={href} rel={href.startsWith('mailto:') ? undefined : 'me noopener'}>
+          {label}
+        </a>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .social {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1rem;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  li + li {
+    margin-top: 0;
+  }
+</style>

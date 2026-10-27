@@ -1,0 +1,144 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SocialLinks from '../components/SocialLinks.astro';
+import PublicationItem from '../components/PublicationItem.astro';
+import PostList from '../components/PostList.astro';
+import FormattedDate from '../components/FormattedDate.astro';
+import { SITE } from '../config';
+import { getNews, getPosts, getPublications } from '../lib/content';
+
+const news = (await getNews()).slice(0, 5);
+const selectedPubs = (await getPublications()).filter((p) => p.data.featured).slice(0, 4);
+const recentPosts = (await getPosts()).slice(0, 3);
+---
+
+<BaseLayout>
+  <section class="hero">
+    {SITE.avatar && <img class="avatar" src={SITE.avatar} alt={`Photo of ${SITE.name}`} width="112" height="112" />}
+    <div>
+      <h1>{SITE.name}</h1>
+      <p class="role">
+        {SITE.role} · <a href={SITE.affiliationUrl}>{SITE.affiliation}</a>
+        {SITE.location && <span class="muted"> · {SITE.location}</span>}
+      </p>
+    </div>
+  </section>
+
+  <!-- TODO: replace this bio with your own. -->
+  <section class="bio">
+    <p>
+      I am a researcher working on <strong>your research area</strong>. My work focuses on
+      a short description of the questions you study and the methods you use. Before this, I
+      studied at a previous institution.
+    </p>
+    <p>
+      I am interested in topic one, topic two, and topic three. Feel free to get in touch if you'd
+      like to collaborate or chat about research.
+    </p>
+    <SocialLinks />
+  </section>
+
+  {
+    news.length > 0 && (
+      <section>
+        <h2>News</h2>
+        <ul class="plain-list news">
+          {news.map((item) => (
+            <li>
+              <span class="muted small">
+                <FormattedDate date={item.data.date} format="short" />
+              </span>
+              <span set:html={item.data.text} />
+            </li>
+          ))}
+        </ul>
+      </section>
+    )
+  }
+
+  {
+    selectedPubs.length > 0 && (
+      <section>
+        <h2>Selected publications</h2>
+        <ul class="plain-list">
+          {selectedPubs.map((pub) => (
+            <PublicationItem pub={pub} />
+          ))}
+        </ul>
+        <p class="small">
+          <a href="/publications/">All publications →</a>
+        </p>
+      </section>
+    )
+  }
+
+  {
+    recentPosts.length > 0 && (
+      <section>
+        <h2>Recent writing</h2>
+        <PostList posts={recentPosts} />
+        <p class="small more">
+          <a href="/blog/">All posts →</a>
+        </p>
+      </section>
+    )
+  }
+</BaseLayout>
+
+<style>
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .avatar {
+    width: 112px;
+    height: 112px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .role {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .bio {
+    margin-bottom: 1rem;
+  }
+
+  .bio :global(.social) {
+    margin-top: 1.25rem;
+  }
+
+  .news li {
+    display: grid;
+    grid-template-columns: 5.5rem 1fr;
+    gap: 1rem;
+    padding: 0.2rem 0;
+  }
+
+  .news li + li {
+    margin-top: 0;
+  }
+
+  .more {
+    margin-top: 0.75rem;
+  }
+
+  @media (max-width: 480px) {
+    .hero {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .news li {
+      grid-template-columns: 1fr;
+      gap: 0;
+      padding: 0.35rem 0;
+    }
+  }
+</style>

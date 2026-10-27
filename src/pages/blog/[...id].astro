@@ -1,0 +1,65 @@
+---
+import { render } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FormattedDate from '../../components/FormattedDate.astro';
+import { getPosts } from '../../lib/content';
+
+export async function getStaticPaths() {
+  const posts = await getPosts();
+  return posts.map((post) => ({ params: { id: post.id }, props: { post } }));
+}
+
+const { post } = Astro.props;
+const { title, description, date, updated, tags, draft } = post.data;
+const { Content } = await render(post);
+---
+
+<BaseLayout title={title} description={description}>
+  <article>
+    <p class="small"><a href="/blog/">← Blog</a></p>
+    <h1>{draft && <span class="draft">Draft</span>}{title}</h1>
+    <p class="muted small meta">
+      <FormattedDate date={date} />
+      {
+        updated && (
+          <>
+            {' '}· Updated <FormattedDate date={updated} />
+          </>
+        )
+      }
+    </p>
+    {
+      tags.length > 0 && (
+        <ul class="tags">
+          {tags.map((tag) => (
+            <li class="tag">{tag}</li>
+          ))}
+        </ul>
+      )
+    }
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</BaseLayout>
+
+<style>
+  .meta {
+    margin-bottom: 0.25rem;
+  }
+
+  .prose {
+    margin-top: 2rem;
+  }
+
+  .draft {
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    vertical-align: middle;
+    margin-right: 0.5rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    background: #f5d76e;
+    color: #3a2f00;
+  }
+</style>

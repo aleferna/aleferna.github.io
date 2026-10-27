@@ -1,0 +1,65 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getProjects } from '../../lib/content';
+
+const projects = await getProjects();
+---
+
+<BaseLayout title="Projects" description="Research and software projects.">
+  <h1>Projects</h1>
+  <p class="page-intro">Research directions, software, and side projects.</p>
+
+  <ul class="plain-list projects">
+    {
+      projects.map((project) => (
+        <li>
+          <h2>
+            <a href={`/projects/${project.id}/`}>{project.data.title}</a>
+          </h2>
+          <p>{project.data.description}</p>
+          <ul class="tags">
+            {project.data.status !== 'active' && <li class="tag status">{project.data.status}</li>}
+            {project.data.tags.map((tag) => (
+              <li class="tag">{tag}</li>
+            ))}
+          </ul>
+        </li>
+      ))
+    }
+  </ul>
+</BaseLayout>
+
+<style>
+  .projects > li {
+    padding: 1.25rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .projects > li + li {
+    margin-top: 0;
+  }
+
+  .projects h2 {
+    font-size: 1.2rem;
+    margin: 0 0 0.35rem;
+  }
+
+  .projects h2 a {
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .projects h2 a:hover {
+    color: var(--accent);
+  }
+
+  .projects p {
+    margin: 0;
+    color: var(--muted);
+  }
+
+  .status {
+    background: var(--surface);
+    color: var(--muted);
+  }
+</style>
