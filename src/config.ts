@@ -1,30 +1,32 @@
-// Edit this file to personalise the site. Everything marked TODO is placeholder text.
+// Edit this file to personalise the site.
 
 export const SITE = {
   // Full name, shown in the header, page titles, and home page.
-  name: 'Alex Fernández', // TODO: your full name
+  name: 'Alexandre P. Fernandes',
   // Name as it appears in author lists; it is bolded in publications.
-  authorName: 'A. Fernández', // TODO
-  role: 'PhD Researcher', // TODO
-  affiliation: 'Your University', // TODO
-  affiliationUrl: 'https://example.edu', // TODO
-  location: 'London, UK', // TODO
-  description: 'Personal website: research, publications, projects, and notes.',
-  email: 'you@example.edu', // TODO: shown on the home page; leave '' to hide
-  // Path to a photo in /public (e.g. '/profile.jpg'); leave '' to hide.
-  avatar: '',
-  // Path to a PDF CV in /public (e.g. '/cv.pdf'); leave '' to hide the download link.
-  cvPdf: '',
+  authorName: 'A. P. Fernandes',
+  role: 'PhD Student',
+  affiliation: 'University of Cambridge',
+  affiliationUrl: 'https://www.slcu.cam.ac.uk/Alexandre-P-Fernandes',
+  location: 'Cambridge, UK',
+  description:
+    'Alexandre P. Fernandes, PhD student at the Sainsbury Laboratory, University of Cambridge, studying the evolution of multicellularity.',
+  email: 'alexandre.porcherfernandes@slcu.cam.ac.uk', // leave '' to hide
+  // Photo shown next to your name on the home page; hidden until the file exists in /public.
+  avatar: '/profile.jpg',
+  // Path to your CV PDF inside /public. Replace public/CV.pdf to update it.
+  cvPdf: '/CV.pdf',
   url: 'https://aleferna.github.io',
 };
 
 // Leave a value as '' to hide that link.
 export const SOCIAL = {
   github: 'https://github.com/aleferna',
-  scholar: '', // e.g. https://scholar.google.com/citations?user=XXXX
-  orcid: '', // e.g. https://orcid.org/0000-0000-0000-0000
+  scholar: 'https://scholar.google.com/citations?user=ekRZB9YAAAAJ',
+  orcid: 'https://orcid.org/0000-0002-6689-3505',
+  bluesky: 'https://bsky.app/profile/alefern.bsky.social',
+  substack: 'https://substack.com/@alexporcherfernandes',
   linkedin: '',
-  bluesky: '',
 };
 
 export const NAV = [

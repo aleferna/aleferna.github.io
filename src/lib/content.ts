@@ -16,8 +16,3 @@ export async function getPublications() {
   const pubs = await getCollection('publications');
   return pubs.sort((a, b) => b.data.year - a.data.year);
 }
-
-export async function getNews() {
-  const news = await getCollection('news');
-  return news.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
-}

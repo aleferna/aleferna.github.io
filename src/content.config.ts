@@ -50,12 +50,4 @@ const publications = defineCollection({
   }),
 });
 
-const news = defineCollection({
-  loader: file('src/content/news.yaml'),
-  schema: z.object({
-    date: z.coerce.date(),
-    text: z.string(),
-  }),
-});
-
-export const collections = { blog, projects, publications, news };
+export const collections = { blog, projects, publications };

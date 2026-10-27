@@ -1,17 +1,38 @@
 ---
+import fs from 'node:fs';
+import path from 'node:path';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import { SITE } from '../config';
-import { Content } from '../content/cv.md';
+
+// The CV is a PDF in /public (path set by `cvPdf` in src/config.ts).
+const pdf = SITE.cvPdf;
+const hasPdf = Boolean(pdf) && fs.existsSync(path.join(process.cwd(), 'public', pdf));
 ---
 
 <BaseLayout title="CV" description={`Curriculum vitae of ${SITE.name}.`}>
   <div class="cv-head">
     <h1>Curriculum Vitae</h1>
-    {SITE.cvPdf && <a class="download" href={SITE.cvPdf}>Download PDF</a>}
+    {
+      hasPdf && (
+        <p class="actions small">
+          <a href={pdf} target="_blank" rel="noopener">Open in new tab</a>
+          <a href={pdf} download>Download PDF</a>
+        </p>
+      )
+    }
   </div>
-  <div class="prose cv">
-    <Content />
-  </div>
+
+  {
+    hasPdf ? (
+      <object class="cv-embed" data={`${pdf}#view=FitH`} type="application/pdf" aria-label="CV (PDF)">
+        <p>
+          Your browser can't display the PDF here. <a href={pdf}>Download the CV</a> instead.
+        </p>
+      </object>
+    ) : (
+      <p class="muted">CV coming soon.</p>
+    )
+  }
 </BaseLayout>
 
 <style>
@@ -23,24 +44,19 @@ import { Content } from '../content/cv.md';
     gap: 0.5rem 1rem;
   }
 
-  .download {
-    font-size: 0.9rem;
+  .actions {
+    display: flex;
+    gap: 1rem;
+    margin: 0;
   }
 
-  .cv :global(h2) {
-    font-size: 1.2rem;
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.3rem;
-  }
-
-  .cv :global(h3) {
-    font-family: var(--font-sans);
-    font-size: 1rem;
-    margin-bottom: 0.1rem;
-  }
-
-  .cv :global(h3 + p) {
-    color: var(--muted);
-    font-size: 0.95rem;
+  .cv-embed {
+    display: block;
+    width: 100%;
+    height: 85vh;
+    margin-top: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--surface);
   }
 </style>

@@ -4,36 +4,31 @@
 #   note: optional short label, e.g. "Oral presentation" or "Best paper award"
 #   links: optional pdf, doi (bare DOI or URL), arxiv (ID or URL), code, slides
 # Your own name is bolded when it matches `authorName` in src/config.ts.
-# TODO: replace these examples with your own publications.
 
-- id: example-2026-preprint
-  title: "An Example Preprint Title on Your Current Research Question"
-  authors: ["A. Fernández", "B. Collaborator", "C. Supervisor"]
-  venue: "arXiv preprint"
-  year: 2026
-  type: preprint
+- id: fernandes-2023-trim-gbe
+  title: "Patterns of evolution of TRIM genes highlight the evolutionary plasticity of antiviral effectors in mammals"
+  authors: ["A. P. Fernandes", "M. OhAinle", "P. J. Esteves"]
+  venue: "Genome Biology and Evolution"
+  year: 2023
+  type: journal
   featured: true
   links:
-    arxiv: "2601.00001"
-    code: "https://github.com/aleferna"
+    doi: "10.1093/gbe/evad209"
 
-- id: example-2025-conference
-  title: "A Conference Paper Describing a Method and Its Evaluation"
-  authors: ["B. Collaborator", "A. Fernández", "C. Supervisor"]
-  venue: "Proceedings of an Example Conference (EXC 2025)"
-  year: 2025
-  type: conference
-  featured: true
-  note: "Oral presentation"
-  links:
-    pdf: "https://example.org/paper.pdf"
-    doi: "10.0000/example.2025.001"
-
-- id: example-2024-journal
-  title: "A Journal Article Reporting Earlier Results"
-  authors: ["A. Fernández", "C. Supervisor"]
-  venue: "Journal of Examples"
-  year: 2024
+- id: fernandes-2022-ccr-bats
+  title: "Evolution of CCR5 and CCR2 genes in bats showed multiple independent gene conversion events"
+  authors: ["A. P. Fernandes", "A. Águeda-Pinto", "A. Pinheiro", "H. Rebelo", "P. J. Esteves"]
+  venue: "Viruses"
+  year: 2022
   type: journal
   links:
-    doi: "10.0000/joe.2024.042"
+    doi: "10.3390/v14020169"
+
+- id: fernandes-2022-trim-bats
+  title: "Evolution of TRIM5 and TRIM22 in bats reveals a complex duplication process"
+  authors: ["A. P. Fernandes", "A. Águeda-Pinto", "A. Pinheiro", "H. Rebelo", "P. J. Esteves"]
+  venue: "Viruses"
+  year: 2022
+  type: journal
+  links:
+    doi: "10.3390/v14020345"

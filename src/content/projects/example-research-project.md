@@ -15,4 +15,4 @@ Describe the motivation, the approach, and the main findings so far.
 
 ## Related publications
 
-- A. Fernández et al. *An Example Preprint Title*, 2026.
+- A. P. Fernandes et al. *An Example Preprint Title*, 2026.
