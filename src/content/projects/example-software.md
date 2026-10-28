@@ -1,10 +1,11 @@
 ---
-title: "example-toolkit"
-description: "An open-source tool you built, for example a library that supports your research."
-date: 2025-03-01
-status: completed
-tags: ["software", "python"]
-repo: "https://github.com/aleferna"
+title: "cellula-rs"
+description: "A fast and extensible implementation of the Cellular Potts Model in Rust."
+featured: true
+date: 2026
+status: active
+tags: ["framework", "modelling", "rust"]
+repo: "https://github.com/aleferna/cellula-rs"
 ---
 
 *Example project. Replace or delete it.*

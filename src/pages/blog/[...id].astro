@@ -15,7 +15,7 @@ const { Content } = await render(post);
 ---
 
 <BaseLayout title={title} description={description}>
-  <article>
+  <article data-cpm-barrier>
     <p class="small"><a href="/blog/">← Blog</a></p>
     <h1>{draft && <span class="draft">Draft</span>}{title}</h1>
     <p class="muted small meta">
@@ -44,6 +44,15 @@ const { Content } = await render(post);
 </BaseLayout>
 
 <style>
+  /* The whole article is one cell, so text inside it keeps the original, tighter spacing. */
+  article :global(p) {
+    margin: 0 0 1rem;
+  }
+
+  article :global(h2) {
+    margin: 2.5rem 0 1rem;
+  }
+
   .meta {
     margin-bottom: 0.25rem;
   }

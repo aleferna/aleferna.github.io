@@ -1,10 +1,10 @@
 ---
 title: "Example Research Project"
 description: "One or two sentences describing the question this project addresses and why it matters."
+featured: false
 date: 2026-01-01
 status: active
 tags: ["research area", "method"]
-featured: true
 ---
 
 *Example project. Replace or delete it. Projects live in `src/content/projects/`.*
