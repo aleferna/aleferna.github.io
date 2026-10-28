@@ -41,5 +41,5 @@ cells cannot enter. The rectangles are recomputed whenever the layout changes.
 ## Deployment
 
 Pushing to `main` runs `.github/workflows/deploy.yml`, which builds the site and publishes it to
-<https://aleferna.github.io>. In the repository settings, under **Settings → Pages → Build and deployment**,
+<https://alex-fernandes.com>. In the repository settings, under **Settings → Pages → Build and deployment**,
 set **Source** to **GitHub Actions** (one-time setup).
