@@ -40,6 +40,7 @@
   const BG = 0;
   const GIANT = 1; // one gigantic cell per layout rectangle
   const CELL = 2; // the small, free-roaming cells
+  const WALL = 3; // a one-site frame around the lattice (see paintWall)
 
   // Giant cells: each one is attracted to the "chemical" of its own rectangle, which is 1
   // inside the rectangle and fades to 0 over DITHER_RADIUS sites around it. The chemical works
@@ -69,25 +70,31 @@
   const AREA = 200;
   const PERIMETER = 180;
 
+  // Adhesion energies between background, giant, and small cell (rows and columns in that order).
+  // The wall kind is added automatically below with the same energies as the background.
+  const J_KINDS = [
+    [0, 20, 20],
+    [20, 60, 60],
+    [20, 60, 60],
+  ];
+
   const CONF = {
     torus: [false, false],
     T: 20,
-    // Adhesion energies: background, giant, small cell
-    // (small–giant is slightly higher than small–background, so small cells mildly avoid giants)
-    J: [
-      [0, 20, 20],
-      [20, 40, 40],
-      [20, 40, 40],
-    ],
-    LAMBDA_V: [0, 0, 50],
-    V: [0, 0, AREA],
-    LAMBDA_P: [0, 0, 2],
-    P: [0, 0, PERIMETER],
+    // Kinds: background, giant, small cell, wall. The wall copies the background's adhesion
+    // energies, so touching the edge of the lattice costs the same as touching empty space.
+    J: [...J_KINDS.map((row) => [...row, row[0]]), [...J_KINDS[0], 0]],
+    LAMBDA_V: [0, 0, 50, 0],
+    V: [0, 0, AREA, 0],
+    LAMBDA_P: [0, 0, 2, 0],
+    P: [0, 0, PERIMETER, 0],
     // Act model: recently extended pixels carry "activity" that decays over MAX_ACT steps, and
     // cells favour extending from active regions.
-    LAMBDA_ACT: [0, 0, 300],
-    MAX_ACT: [0, 0, 20],
+    LAMBDA_ACT: [0, 0, 300, 0],
+    MAX_ACT: [0, 0, 20, 0],
     ACT_MEAN: 'geometric',
+    // Nothing can copy into or out of the wall.
+    IS_BARRIER: [false, false, false, true],
   };
 
 
@@ -351,6 +358,22 @@
     })({});
   }
 
+  // Frame the lattice with a one-site wall. Without it, sites on the edge have missing
+  // neighbours: their perimeter isn't counted and contact with the edge costs nothing, so cells
+  // smear along the edges as if their target perimeter were much larger.
+  let wallId = -1;
+  function paintWall() {
+    wallId = C.makeNewCellID(WALL);
+    for (let x = 0; x < W; x++) {
+      C.setpixi(idx(x, 0), wallId);
+      C.setpixi(idx(x, H - 1), wallId);
+    }
+    for (let y = 0; y < H; y++) {
+      C.setpixi(idx(0, y), wallId);
+      C.setpixi(idx(W - 1, y), wallId);
+    }
+  }
+
   // One giant per rectangle, starting out filling it exactly.
   function seedGiants() {
     giantIds = [];
@@ -398,16 +421,18 @@
     C = new CPM.CPM([W, H], { ...CONF, seed: Math.floor(Math.random() * 1e9) });
     C.add(makeGiantConstraint());
     attractor = new CPM.AttractionPointConstraint({
-      LAMBDA_ATTRACTIONPOINT: [0, 0, 0],
+      LAMBDA_ATTRACTIONPOINT: [0, 0, 0, 0],
       ATTRACTIONPOINT: [
         [NaN, NaN],
         [NaN, NaN],
         [0, 0],
+        [NaN, NaN],
       ],
     });
     C.add(attractor);
     paintField();
     seedGiants();
+    paintWall();
     seedCells();
     // Artistoo's Act constraint stores an activity entry for every pixel that was set, so
     // seeding fills it with tens of thousands of entries (mostly giant pixels, which have no
@@ -492,7 +517,7 @@
 
         let c = null;
         const i = (x << YB) | y;
-        if (t !== BG) {
+        if (t !== BG && t !== wallId) {
           const edge =
             (x > 0 && grid[((x - 1) << YB) | y] !== t) ||
             (x < W - 1 && grid[((x + 1) << YB) | y] !== t) ||
