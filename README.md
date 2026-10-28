@@ -17,6 +17,18 @@ Personal academic website built with [Astro](https://astro.build) and deployed t
 
 Blog posts with `draft: true` show up locally but are not published.
 
+## Background simulation
+
+A Cellular Potts model ([Artistoo](https://artistoo.net), vendored in `public/vendor/`) runs behind every page,
+set up in `src/components/CpmBackground.astro`. Each part of the layout (the innermost block elements:
+paragraphs, headings, list items, images, buttons) is projected onto the lattice as a solid rectangle that
+cells cannot enter. The rectangles are recomputed whenever the layout changes.
+
+- `?cpm=debug` shows the barrier rectangles; `?cpm=off` disables the simulation.
+- Add `data-cpm-barrier` to an element to treat it as one rectangle, or `data-cpm-skip` to ignore it.
+- Model parameters (lattice scale, cell size, density, adhesion, activity) are at the top of the component.
+- The simulation is not loaded for visitors who have reduced motion enabled.
+
 ## Commands
 
 | Command | Action |

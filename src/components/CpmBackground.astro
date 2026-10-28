@@ -1,0 +1,293 @@
+---
+// Cellular Potts model running behind the page. Every "part" of the layout (the innermost
+// block-level elements: paragraphs, headings, list items, images, buttons, ...) is projected
+// onto the lattice as a solid rectangle that cells cannot enter.
+//
+// Options (query string, for experimenting):
+//   ?cpm=debug  draw the barrier rectangles and expose the model as `window.cpm`
+//   ?cpm=off    disable the simulation
+//
+// Per element:
+//   data-cpm-barrier  treat this element as one rectangle (don't look inside it)
+//   data-cpm-skip     ignore this element and its children
+---
+
+<div id="cpm-layer" aria-hidden="true">
+  <canvas id="cpm-canvas"></canvas>
+</div>
+
+<script>
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+
+  // ---- Model settings -----------------------------------------------------------------------
+  const SCALE = 4; // CSS pixels per lattice site
+  const PAD = 1; // extra lattice sites around each barrier rectangle
+  const DENSITY = 0.12; // fraction of the free lattice to fill with cells
+  const MAX_CELLS = 250;
+  const MCS_PER_FRAME = 1;
+
+  const BG = 0;
+  const BARRIER = 1;
+  const CELL = 2;
+
+  const CONF = {
+    torus: [false, false],
+    T: 20,
+    // Adhesion energies: background, barrier, cell
+    J: [
+      [0, 0, 20],
+      [0, 0, 20],
+      [20, 20, 30],
+    ],
+    LAMBDA_V: [0, 0, 30],
+    V: [0, 0, 150],
+    LAMBDA_P: [0, 0, 2],
+    P: [0, 0, 150],
+    LAMBDA_ACT: [0, 0, 200],
+    MAX_ACT: [0, 0, 40],
+    ACT_MEAN: 'geometric',
+    IS_BARRIER: [false, true, false],
+  };
+
+  // Elements that are always one rectangle (their contents are not inspected).
+  const ATOMIC = new Set(['IMG', 'SVG', 'svg', 'OBJECT', 'IFRAME', 'VIDEO', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'PRE', 'TABLE']);
+  const IGNORED = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'BR']);
+
+  const mode = new URLSearchParams(location.search).get('cpm');
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const layer = document.getElementById('cpm-layer') as HTMLDivElement;
+  const canvas = document.getElementById('cpm-canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d')!;
+
+  let CPM: any;
+  let C: any = null;
+  let W = 0;
+  let H = 0;
+  let barrierId = 0;
+  let barrierPixels: number[] = [];
+  let image: ImageData | null = null;
+  let colors = { fill: [0, 0, 0, 0], edge: [0, 0, 0, 0], barrier: [0, 0, 0, 0] };
+
+  function loadArtistoo(): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/vendor/artistoo.min.js';
+      s.onload = () => resolve((window as any).CPM);
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  // ---- Layout -> rectangles ----------------------------------------------------------------
+  function isInlineDisplay(d: string) {
+    return d === 'inline' || d.startsWith('inline-') || d === 'ruby';
+  }
+
+  function collectRects(el: Element, out: DOMRect[]) {
+    if (el === layer || IGNORED.has(el.tagName) || el.hasAttribute('data-cpm-skip')) return;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return;
+
+    if (ATOMIC.has(el.tagName) || el.hasAttribute('data-cpm-barrier')) {
+      out.push(el.getBoundingClientRect());
+      return;
+    }
+
+    const kids = [...el.children].filter((k) => !IGNORED.has(k.tagName));
+    const hasBlockKid = kids.some((k) => {
+      if (ATOMIC.has(k.tagName)) return false;
+      const d = getComputedStyle(k).display;
+      return d !== 'none' && !isInlineDisplay(d);
+    });
+
+    if (!hasBlockKid && cs.display !== 'contents') {
+      // Innermost block (or a stray inline element): one rectangle for the whole part.
+      if (el.textContent?.trim() || kids.length) out.push(el.getBoundingClientRect());
+      return;
+    }
+    for (const k of kids) collectRects(k, out);
+  }
+
+  function layoutRects() {
+    const origin = layer.getBoundingClientRect();
+    const rects: DOMRect[] = [];
+    collectRects(document.body, rects);
+    return rects
+      .filter((r) => r.width > 0 && r.height > 0)
+      .map((r) => ({
+        x0: Math.max(0, Math.floor((r.left - origin.left) / SCALE) - PAD),
+        y0: Math.max(0, Math.floor((r.top - origin.top) / SCALE) - PAD),
+        x1: Math.min(W - 1, Math.ceil((r.right - origin.left) / SCALE) + PAD - 1),
+        y1: Math.min(H - 1, Math.ceil((r.bottom - origin.top) / SCALE) + PAD - 1),
+      }));
+  }
+
+  // ---- Model ------------------------------------------------------------------------------
+  function idx(x: number, y: number) {
+    return (x << C.grid.Y_BITS) | y;
+  }
+
+  function paintBarriers() {
+    const next = new Set<number>();
+    for (const r of layoutRects()) {
+      for (let x = r.x0; x <= r.x1; x++) {
+        for (let y = r.y0; y <= r.y1; y++) next.add(idx(x, y));
+      }
+    }
+    // Add the new barrier pixels before removing stale ones: Artistoo deletes a cell whose
+    // volume reaches zero, which would also delete the barrier's cell kind.
+    for (const i of next) if (C.pixti(i) !== barrierId) C.setpixi(i, barrierId);
+    for (const i of barrierPixels) if (!next.has(i) && C.pixti(i) === barrierId) C.setpixi(i, BG);
+    barrierPixels = [...next];
+  }
+
+  function seedCells() {
+    const free = W * H - barrierPixels.length;
+    const n = Math.min(MAX_CELLS, Math.floor((free * DENSITY) / CONF.V[CELL]));
+    for (let k = 0; k < n; k++) {
+      for (let attempt = 0; attempt < 50; attempt++) {
+        const x = Math.floor(Math.random() * W);
+        const y = Math.floor(Math.random() * H);
+        if (C.pixti(idx(x, y)) === BG) {
+          C.setpixi(idx(x, y), C.makeNewCellID(CELL));
+          break;
+        }
+      }
+    }
+    // Let cells grow to their target size before showing them.
+    for (let t = 0; t < 30; t++) C.timeStep();
+  }
+
+  function build() {
+    C = new CPM.CPM([W, H], { ...CONF, seed: Math.floor(Math.random() * 1e9) });
+    barrierId = C.makeNewCellID(BARRIER);
+    barrierPixels = [];
+    paintBarriers();
+    seedCells();
+    if (mode === 'debug') (window as any).cpm = C; // inspect the model from the console
+  }
+
+  function measure() {
+    return {
+      w: Math.ceil(document.documentElement.clientWidth / SCALE),
+      h: Math.ceil(document.body.getBoundingClientRect().height / SCALE),
+    };
+  }
+
+  function sync() {
+    const { w, h } = measure();
+    if (!C || w !== W || h !== H) {
+      W = w;
+      H = h;
+      canvas.width = W;
+      canvas.height = H;
+      canvas.style.width = `${W * SCALE}px`;
+      canvas.style.height = `${H * SCALE}px`;
+      image = ctx.createImageData(W, H);
+      build();
+    } else {
+      paintBarriers();
+    }
+  }
+
+  // ---- Drawing ----------------------------------------------------------------------------
+  function readColors() {
+    const root = getComputedStyle(document.documentElement);
+    const hex = root.getPropertyValue('--accent').trim().replace('#', '');
+    const muted = root.getPropertyValue('--muted').trim().replace('#', '');
+    const rgb = (h: string) => [0, 2, 4].map((o) => parseInt(h.slice(o, o + 2), 16));
+    const dark = document.documentElement.dataset.theme === 'dark';
+    const a = rgb(hex);
+    colors = {
+      fill: [...a, dark ? 40 : 28],
+      edge: [...a, dark ? 130 : 110],
+      barrier: [...rgb(muted), 40],
+    };
+  }
+
+  function draw() {
+    if (!image) return;
+    // Only redraw the rows that are on screen.
+    const origin = layer.getBoundingClientRect();
+    const y0 = Math.max(0, Math.floor(-origin.top / SCALE) - 2);
+    const y1 = Math.min(H, Math.ceil((innerHeight - origin.top) / SCALE) + 2);
+    if (y1 <= y0) return;
+
+    const px = image.data;
+    const grid = C.grid._pixelArray;
+    const YB = C.grid.Y_BITS;
+    const debug = mode === 'debug';
+
+    for (let y = y0; y < y1; y++) {
+      for (let x = 0; x < W; x++) {
+        const t = grid[(x << YB) | y];
+        let c = null;
+        if (t !== BG && t !== barrierId) {
+          const edge =
+            (x > 0 && grid[((x - 1) << YB) | y] !== t) ||
+            (x < W - 1 && grid[((x + 1) << YB) | y] !== t) ||
+            (y > 0 && grid[(x << YB) | (y - 1)] !== t) ||
+            (y < H - 1 && grid[(x << YB) | (y + 1)] !== t);
+          c = edge ? colors.edge : colors.fill;
+        } else if (debug && t === barrierId) {
+          c = colors.barrier;
+        }
+        const o = (y * W + x) * 4;
+        if (c) {
+          px[o] = c[0];
+          px[o + 1] = c[1];
+          px[o + 2] = c[2];
+          px[o + 3] = c[3];
+        } else {
+          px[o + 3] = 0;
+        }
+      }
+    }
+    ctx.putImageData(image, 0, 0, 0, y0, W, y1 - y0);
+  }
+
+  // ---- Main loop --------------------------------------------------------------------------
+  function frame() {
+    for (let i = 0; i < MCS_PER_FRAME; i++) C.timeStep();
+    draw();
+    requestAnimationFrame(frame);
+  }
+
+  async function start() {
+    CPM = await loadArtistoo();
+    await document.fonts?.ready;
+    readColors();
+    sync();
+
+    let pending = 0;
+    new ResizeObserver(() => {
+      cancelAnimationFrame(pending);
+      pending = requestAnimationFrame(sync);
+    }).observe(document.body);
+
+    new MutationObserver(readColors).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
+
+    requestAnimationFrame(frame);
+  }
+
+  if (mode !== 'off' && !reducedMotion) start();
+</script>
+
+<style>
+  #cpm-layer {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  #cpm-canvas {
+    display: block;
+    image-rendering: pixelated;
+  }
+</style>

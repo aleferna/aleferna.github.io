@@ -2,6 +2,7 @@
 import '../styles/global.css';
 import Header from '../components/Header.astro';
 import Footer from '../components/Footer.astro';
+import CpmBackground from '../components/CpmBackground.astro';
 import { SITE } from '../config';
 
 interface Props {
@@ -48,11 +49,13 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url);
       <slot />
     </main>
     <Footer />
+    <CpmBackground />
   </body>
 </html>
 
 <style>
   body {
+    position: relative;
     min-height: 100vh;
     display: flex;
     flex-direction: column;
