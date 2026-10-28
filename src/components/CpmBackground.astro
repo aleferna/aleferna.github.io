@@ -4,7 +4,8 @@
 // onto the lattice as a solid rectangle that cells cannot enter.
 //
 // Options (query string, for experimenting):
-//   ?cpm=debug  draw the barrier rectangles and expose the model as `window.cpm`
+//   ?cpm=debug  outline each barrier element, shade the barrier pixels, and expose the
+//               model as `window.cpm`
 //   ?cpm=off    disable the simulation
 //
 // Per element:
@@ -85,7 +86,7 @@
   }
 
   function collectRects(el: Element, out: DOMRect[]) {
-    if (el === layer || IGNORED.has(el.tagName) || el.hasAttribute('data-cpm-skip')) return;
+    if (el === layer || el === debugLayer || IGNORED.has(el.tagName) || el.hasAttribute('data-cpm-skip')) return;
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') return;
 
@@ -115,6 +116,8 @@
     collectRects(document.body, rects);
     return rects
       .filter((r) => r.width > 0 && r.height > 0)
+      // Drop elements that sit outside the page (e.g. the off-screen skip link).
+      .filter((r) => r.right > origin.left && r.left < origin.right && r.bottom > origin.top && r.top < origin.bottom)
       .map((r) => ({
         x0: Math.max(0, Math.floor((r.left - origin.left) / SCALE) - PAD),
         y0: Math.max(0, Math.floor((r.top - origin.top) / SCALE) - PAD),
@@ -128,9 +131,33 @@
     return (x << C.grid.Y_BITS) | y;
   }
 
+  // Debug overlay: one rounded rectangle per barrier element, drawn above the page.
+  let debugLayer: HTMLDivElement | null = null;
+
+  function drawDebugBoxes(rects: { x0: number; y0: number; x1: number; y1: number }[]) {
+    if (!debugLayer) {
+      debugLayer = document.createElement('div');
+      debugLayer.setAttribute('aria-hidden', 'true');
+      debugLayer.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1000';
+      document.body.appendChild(debugLayer);
+    }
+    debugLayer.replaceChildren(
+      ...rects.map((r) => {
+        const box = document.createElement('div');
+        box.style.cssText =
+          `position:absolute;box-sizing:border-box;border:1.5px solid rgba(220,50,90,.85);border-radius:6px;` +
+          `left:${r.x0 * SCALE}px;top:${r.y0 * SCALE}px;` +
+          `width:${(r.x1 - r.x0 + 1) * SCALE}px;height:${(r.y1 - r.y0 + 1) * SCALE}px`;
+        return box;
+      }),
+    );
+  }
+
   function paintBarriers() {
     const next = new Set<number>();
-    for (const r of layoutRects()) {
+    const rects = layoutRects();
+    if (mode === 'debug') drawDebugBoxes(rects);
+    for (const r of rects) {
       for (let x = r.x0; x <= r.x1; x++) {
         for (let y = r.y0; y <= r.y1; y++) next.add(idx(x, y));
       }
