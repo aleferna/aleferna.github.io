@@ -12,6 +12,8 @@
   --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
   --measure: 42rem;
+  /* Gap between large elements (separate cells in the background simulation). */
+  --gap-large: calc(3.25rem + 65px);
   color-scheme: light;
 }
 
@@ -70,7 +72,7 @@ h1 {
 
 h2 {
   font-size: 1.4rem;
-  margin: calc(3.25rem + 65px) 0 calc(1.5rem + 65px);
+  margin: var(--gap-large) 0 calc(1.5rem + 65px);
 }
 
 h3 {
@@ -162,7 +164,7 @@ main > .container > :last-child > :last-child > :last-child > :last-child {
 
 .page-intro {
   color: var(--muted);
-  margin-bottom: calc(2.75rem + 65px);
+  margin-bottom: var(--gap-large);
 }
 
 .tag {
@@ -232,4 +234,17 @@ main > .container > :last-child > :last-child > :last-child > :last-child {
   color: var(--shiki-dark) !important;
   font-style: var(--shiki-dark-font-style) !important;
   font-weight: var(--shiki-dark-font-weight) !important;
+}
+
+/* Cursor while it attracts the background cells (header toggle): a ring in the accent colour. */
+:root[data-sim='on'][data-attract='on'] body {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='white' stroke-width='4'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%232557a7' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%232557a7'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
+}
+
+:root[data-sim='on'][data-attract='on'][data-theme='dark'] body {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%23121212' stroke-width='4'/%3E%3Ccircle cx='12' cy='12' r='8' fill='none' stroke='%238ab4f8' stroke-width='2'/%3E%3Ccircle cx='12' cy='12' r='2' fill='%238ab4f8'/%3E%3C/svg%3E")
+      12 12,
+    crosshair;
 }

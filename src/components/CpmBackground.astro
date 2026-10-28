@@ -1,12 +1,15 @@
 ---
 // Cellular Potts model running behind the page content (inside <main>, so the top and bottom
-// bars are left out). Every "part" of the layout (the innermost
-// block-level elements: paragraphs, headings, list items, images, buttons, ...) is projected
-// onto the lattice as a solid rectangle that cells cannot enter.
+// bars are left out). Every "part" of the layout (the innermost block-level elements:
+// paragraphs, headings, list items, images, buttons, ...) is projected onto the lattice as a
+// rectangle of "chemical", 1 inside and fading to 0 over DITHER_RADIUS sites around it. Each
+// rectangle gets one gigantic cell that is attracted to its own chemical (see GIANT below);
+// small Act-model cells move around between them (approach adapted from the butterfly example
+// in github.com/aleferna/cellula-rs).
 //
 // Options (query string, for experimenting):
-//   ?cpm=debug  outline each barrier element, shade the barrier pixels, and expose the
-//               model as `window.cpm`
+//   ?cpm=debug  outline each element's rectangle, shade the chemical field, and expose the
+//               model as `window.cpm` (and the field as `window.cpmField()`)
 //   ?cpm=off    disable the simulation
 //
 // Per element:
@@ -25,8 +28,8 @@
 
   // ---- Model settings -----------------------------------------------------------------------
   const SCALE = 4; // CSS pixels per lattice site
-  // Extra lattice sites around each barrier rectangle: content blocks get a wider margin than the
-  // small items in the top/bottom bars and the social links.
+  // Extra lattice sites around each layout rectangle: content blocks get a wider margin than the
+  // social links.
   const PAD = 2;
   const PAD_SMALL = 1;
   const SMALL_PAD_SELECTOR = '.social';
@@ -35,8 +38,31 @@
   const MCS_PER_FRAME = 1;
 
   const BG = 0;
-  const BARRIER = 1;
-  const CELL = 2;
+  const GIANT = 1; // one gigantic cell per layout rectangle
+  const CELL = 2; // the small, free-roaming cells
+
+  // Giant cells: each one is attracted to the "chemical" of its own rectangle, which is 1
+  // inside the rectangle and fades to 0 over DITHER_RADIUS sites around it. The chemical works
+  // as a potential, like the shape fill in cellula-rs' butterfly example: a giant gaining a
+  // site lowers the energy by CHEM_LAMBDA × c, losing one raises it by the same amount. Giants
+  // have no Act dynamics; their target area is the area of their rectangle (their own volume
+  // term, since Artistoo's volume constraint only supports one target per cell kind).
+  // Small cells keep the Act model and ignore the chemical.
+  const CHEM_LAMBDA = 50;
+  const DITHER_RADIUS = 8; // sites around each rectangle over which the chemical fades to 0
+  const GIANT_LAMBDA_V = 2;
+  const GIANT_VOLUME_FACTOR = 1.1; // giant target volume = this × the area of its rectangle
+  // Each element's rectangle is widened around its centre by √RECT_GROWTH (the width a 20%
+  // larger area would have), and grown by a fixed RECT_GROW_Y px at the top and bottom. A
+  // fixed vertical growth keeps the gaps between stacked cells the same everywhere; scaling the
+  // height made tall blocks eat more of the gap than short ones.
+  // Cursor attractor (header toggle): small cells are pulled towards the cursor with Artistoo's
+  // AttractionPointConstraint; ΔH = -ATTRACT_LAMBDA × cos(angle between copy and cursor).
+  const ATTRACT_LAMBDA = 60;
+  const RECT_GROWTH = 1.2;
+  const RECT_GROW_Y = 8;
+  // Corner radius of the rectangles (lattice sites, × SCALE px), capped at half the shorter side.
+  const CORNER_RADIUS = 6;
 
   // Target cell area (lattice sites) and perimeter: 1.1 × the perimeter of a circle with that
   // area, with Artistoo's perimeter counted as 3 per unit of boundary length.
@@ -46,11 +72,12 @@
   const CONF = {
     torus: [false, false],
     T: 20,
-    // Adhesion energies: background, barrier, cell
+    // Adhesion energies: background, giant, small cell
+    // (small–giant is slightly higher than small–background, so small cells mildly avoid giants)
     J: [
-      [0, 0, 20],
-      [0, 0, 20],
-      [20, 20, 30],
+      [0, 20, 20],
+      [20, 40, 25],
+      [20, 25, 30],
     ],
     LAMBDA_V: [0, 0, 50],
     V: [0, 0, AREA],
@@ -61,7 +88,6 @@
     LAMBDA_ACT: [0, 0, 300],
     MAX_ACT: [0, 0, 20],
     ACT_MEAN: 'geometric',
-    IS_BARRIER: [false, true, false],
   };
 
 
@@ -70,22 +96,39 @@
   const IGNORED = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'BR']);
 
   const mode = new URLSearchParams(location.search).get('cpm');
-  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // Startup timing (ms since navigation); logged to the console with ?cpm=debug.
+  const timings: Record<string, number> = { script: Math.round(performance.now()) };
+  const mark = (name: string) => {
+    if (!(name in timings)) timings[name] = Math.round(performance.now());
+  };
+  // On/off state lives in data-sim on <html> (set early in BaseLayout, flipped by the header
+  // toggle); reduced motion and ?cpm=off are folded into it there.
+  const simOn = () => document.documentElement.dataset.sim !== 'off';
+  let started = false;
+  let running = false;
+  let attractor: any = null; // the AttractionPointConstraint; its conf is updated every frame
+  let pointer: [number, number] | null = null; // last cursor position (client coordinates)
+  addEventListener('pointermove', (e) => (pointer = [e.clientX, e.clientY]), { passive: true });
+  addEventListener('pointerdown', (e) => (pointer = [e.clientX, e.clientY]), { passive: true });
+  document.documentElement.addEventListener('pointerleave', () => (pointer = null));
 
   const layer = document.getElementById('cpm-layer') as HTMLDivElement;
   const canvas = document.getElementById('cpm-canvas') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d')!;
-  // The element the simulation covers (<main>); layout parts inside it become barriers.
+  // The element the simulation covers (<main>); layout parts inside it become chemical sources.
   const container = layer.parentElement as HTMLElement;
 
   let CPM: any;
   let C: any = null;
   let W = 0;
   let H = 0;
-  let barrierId = 0;
-  let barrierPixels: number[] = [];
+  type Rect = { x0: number; y0: number; x1: number; y1: number };
+  let field = new Float32Array(0); // combined chemical of all rectangles (only shown in debug mode)
+  let rects: Rect[] = [];
+  let giantIds: number[] = []; // giantIds[k] lives on rects[k]
+  const giantRect = new Map<number, Rect>();
   let image: ImageData | null = null;
-  let colors = { fill: [0, 0, 0, 0], edge: [0, 0, 0, 0], barrier: [0, 0, 0, 0] };
+  let colors = { fill: [0, 0, 0, 0], edge: [0, 0, 0, 0], giantFill: [0, 0, 0, 0], giantEdge: [0, 0, 0, 0], field: [0, 0, 0, 0] };
 
   function loadArtistoo(): Promise<any> {
     return new Promise((resolve, reject) => {
@@ -127,7 +170,7 @@
     for (const k of kids) collectElements(k, out);
   }
 
-  // Re-measure whenever the page or any barrier element changes size (e.g. when a font finishes
+  // Re-measure whenever the page or any layout element changes size (e.g. when a font finishes
   // loading and text gets wider without the page itself changing size).
   let pending = 0;
   const observed = new Set<Element>();
@@ -187,12 +230,20 @@
       }
     }
 
-    return merged.map(({ r, pad }) => ({
-        x0: Math.max(0, Math.floor((r.left - origin.left) / SCALE) - pad),
-        y0: Math.max(0, Math.floor((r.top - origin.top) / SCALE) - pad),
-        x1: Math.min(W - 1, Math.ceil((r.right - origin.left) / SCALE) + pad - 1),
-        y1: Math.min(H - 1, Math.ceil((r.bottom - origin.top) / SCALE) + pad - 1),
-      }));
+    // Widen each rectangle around its centre by √RECT_GROWTH; add RECT_GROW_Y px top and bottom.
+    const k = Math.sqrt(RECT_GROWTH);
+    return merged.map(({ r, pad }) => {
+      const cx = (r.left + r.right) / 2 - origin.left;
+      const cy = (r.top + r.bottom) / 2 - origin.top;
+      const hw = ((r.right - r.left) * k) / 2;
+      const hh = (r.bottom - r.top) / 2 + RECT_GROW_Y;
+      return {
+        x0: Math.max(0, Math.floor((cx - hw) / SCALE) - pad),
+        y0: Math.max(0, Math.floor((cy - hh) / SCALE) - pad),
+        x1: Math.min(W - 1, Math.ceil((cx + hw) / SCALE) + pad - 1),
+        y1: Math.min(H - 1, Math.ceil((cy + hh) / SCALE) + pad - 1),
+      };
+    });
   }
 
   // ---- Model ------------------------------------------------------------------------------
@@ -200,7 +251,7 @@
     return (x << C.grid.Y_BITS) | y;
   }
 
-  // Debug overlay: one rounded rectangle per barrier element, drawn above the page.
+  // Debug overlay: one rounded rectangle per layout element, drawn above the page.
   let debugLayer: HTMLDivElement | null = null;
 
   function drawDebugBoxes(rects: { x0: number; y0: number; x1: number; y1: number }[]) {
@@ -214,7 +265,7 @@
       ...rects.map((r) => {
         const box = document.createElement('div');
         box.style.cssText =
-          `position:absolute;box-sizing:border-box;border:1.5px solid rgba(220,50,90,.85);border-radius:6px;` +
+          `position:absolute;box-sizing:border-box;border:1.5px solid rgba(220,50,90,.85);border-radius:${cornerRadius(r) * SCALE}px;` +
           `left:${r.x0 * SCALE}px;top:${r.y0 * SCALE}px;` +
           `width:${(r.x1 - r.x0 + 1) * SCALE}px;height:${(r.y1 - r.y0 + 1) * SCALE}px`;
         return box;
@@ -222,46 +273,153 @@
     );
   }
 
-  function paintBarriers() {
-    const next = new Set<number>();
-    const rects = layoutRects();
+  // Chemical field: 1 inside each rectangle, falling off linearly with distance to 0 at
+  // DITHER_RADIUS; overlapping rectangles take the maximum.
+  function paintField() {
+    rects = layoutRects();
+    // Point each giant at its (possibly moved or resized) rectangle.
+    if (giantIds.length === rects.length) giantIds.forEach((id, k) => giantRect.set(id, rects[k]));
     if (mode === 'debug') drawDebugBoxes(rects);
+    const next = new Float32Array(C.grid._pixelArray.length);
+    const R = DITHER_RADIUS;
     for (const r of rects) {
-      for (let x = r.x0; x <= r.x1; x++) {
-        for (let y = r.y0; y <= r.y1; y++) next.add(idx(x, y));
+      for (let x = Math.max(0, r.x0 - R); x <= Math.min(W - 1, r.x1 + R); x++) {
+        for (let y = Math.max(0, r.y0 - R); y <= Math.min(H - 1, r.y1 + R); y++) {
+          const v = chemAtXY(r, x, y);
+          const i = idx(x, y);
+          if (v > next[i]) next[i] = v;
+        }
       }
     }
-    // Add the new barrier pixels before removing stale ones: Artistoo deletes a cell whose
-    // volume reaches zero, which would also delete the barrier's cell kind.
-    for (const i of next) if (C.pixti(i) !== barrierId) C.setpixi(i, barrierId);
-    for (const i of barrierPixels) if (!next.has(i) && C.pixti(i) === barrierId) C.setpixi(i, BG);
-    barrierPixels = [...next];
+    field = next;
+  }
+
+  function cornerRadius(r: Rect) {
+    return Math.min(CORNER_RADIUS, (r.x1 - r.x0) / 2, (r.y1 - r.y0) / 2);
+  }
+
+  // Distance from (x, y) to the rounded rectangle r; 0 or less means inside.
+  function roundedDistance(r: Rect, x: number, y: number) {
+    const rc = cornerRadius(r);
+    const dx = Math.max(r.x0 + rc - x, 0, x - (r.x1 - rc));
+    const dy = Math.max(r.y0 + rc - y, 0, y - (r.y1 - rc));
+    return Math.hypot(dx, dy) - rc;
+  }
+
+  // Chemical of rectangle r at (x, y): 1 inside, fading to 0 over DITHER_RADIUS outside.
+  function chemAtXY(r: Rect, x: number, y: number) {
+    const d = roundedDistance(r, x, y);
+    if (d <= 0) return 1;
+    return Math.max(0, 1 - d / DITHER_RADIUS);
+  }
+
+  // Chemical of rectangle r at grid index i.
+  function chemAt(r: Rect, i: number) {
+    const YB = C.grid.Y_BITS;
+    return chemAtXY(r, i >> YB, i & ((1 << YB) - 1));
+  }
+
+  // Area of the rounded rectangle (each corner loses a square of side rc minus a quarter disc).
+  function rectArea(r: Rect) {
+    const rc = cornerRadius(r);
+    return (r.x1 - r.x0 + 1) * (r.y1 - r.y0 + 1) - (4 - Math.PI) * rc * rc;
+  }
+
+  // Soft constraint for the giant cells: attraction to their own rectangle plus a volume term
+  // with a per-cell target (the rectangle's area).
+  function makeGiantConstraint() {
+    return new (class GiantCells extends CPM.SoftConstraint {
+      confChecker() {}
+      deltaH(_src: number, tgt: number, srcType: number, tgtType: number) {
+        let dH = 0;
+        const gainer = giantRect.get(srcType);
+        if (gainer) {
+          const v = C.getVolume(srcType);
+          const v0 = rectArea(gainer) * GIANT_VOLUME_FACTOR;
+          dH += -CHEM_LAMBDA * chemAt(gainer, tgt);
+          dH += GIANT_LAMBDA_V * ((v + 1 - v0) ** 2 - (v - v0) ** 2);
+        }
+        const loser = giantRect.get(tgtType);
+        if (loser) {
+          const v = C.getVolume(tgtType);
+          const v0 = rectArea(loser) * GIANT_VOLUME_FACTOR;
+          dH += CHEM_LAMBDA * chemAt(loser, tgt);
+          dH += GIANT_LAMBDA_V * ((v - 1 - v0) ** 2 - (v - v0) ** 2);
+        }
+        return dH;
+      }
+    })({});
+  }
+
+  // One giant per rectangle, starting out filling it exactly.
+  function seedGiants() {
+    giantIds = [];
+    giantRect.clear();
+    for (const r of rects) {
+      const id = C.makeNewCellID(GIANT);
+      for (let x = r.x0; x <= r.x1; x++) {
+        for (let y = r.y0; y <= r.y1; y++) if (roundedDistance(r, x, y) <= 0) C.setpixi(idx(x, y), id);
+      }
+      giantIds.push(id);
+      giantRect.set(id, r);
+    }
   }
 
   function seedCells() {
-    const free = W * H - barrierPixels.length;
+    let free = 0;
+    for (let x = 0; x < W; x++) for (let y = 0; y < H; y++) if (C.pixti(idx(x, y)) === BG) free++;
     const n = Math.min(MAX_CELLS, Math.floor((free * DENSITY) / CONF.V[CELL]));
     for (let k = 0; k < n; k++) {
       for (let attempt = 0; attempt < 50; attempt++) {
         const x = Math.floor(Math.random() * W);
         const y = Math.floor(Math.random() * H);
         if (C.pixti(idx(x, y)) === BG) {
-          C.setpixi(idx(x, y), C.makeNewCellID(CELL));
+          seedDisc(x, y, C.makeNewCellID(CELL), CONF.V[CELL]);
           break;
         }
       }
     }
-    // Let cells grow to their target size before showing them.
-    for (let t = 0; t < 30; t++) C.timeStep();
+  }
+
+  // Start a cell as a disc of (up to) the given area on free background sites, so it appears
+  // at full size immediately instead of growing from a single pixel.
+  function seedDisc(cx: number, cy: number, id: number, area: number) {
+    const r = Math.sqrt(area / Math.PI);
+    const ri = Math.ceil(r);
+    for (let x = Math.max(0, cx - ri); x <= Math.min(W - 1, cx + ri); x++) {
+      for (let y = Math.max(0, cy - ri); y <= Math.min(H - 1, cy + ri); y++) {
+        const i = idx(x, y);
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= r * r && C.pixti(i) === BG) C.setpixi(i, id);
+      }
+    }
   }
 
   function build() {
     C = new CPM.CPM([W, H], { ...CONF, seed: Math.floor(Math.random() * 1e9) });
-    barrierId = C.makeNewCellID(BARRIER);
-    barrierPixels = [];
-    paintBarriers();
+    C.add(makeGiantConstraint());
+    attractor = new CPM.AttractionPointConstraint({
+      LAMBDA_ATTRACTIONPOINT: [0, 0, 0],
+      ATTRACTIONPOINT: [
+        [NaN, NaN],
+        [NaN, NaN],
+        [0, 0],
+      ],
+    });
+    C.add(attractor);
+    paintField();
+    seedGiants();
     seedCells();
-    if (mode === 'debug') (window as any).cpm = C; // inspect the model from the console
+    // Artistoo's Act constraint stores an activity entry for every pixel that was set, so
+    // seeding fills it with tens of thousands of entries (mostly giant pixels, which have no
+    // activity). Its first update then deletes them one by one, which takes seconds in Firefox.
+    // Start with an empty store instead.
+    const act = C.soft_constraints.find((c: any) => 'cellpixelsact' in c);
+    if (act) act.cellpixelsact = {};
+    if (mode === 'debug') {
+      // inspect the model and the chemical field from the console
+      (window as any).cpm = C;
+      (window as any).cpmField = () => field;
+    }
   }
 
   function measure() {
@@ -272,7 +430,14 @@
   }
 
   function sync() {
+    if (!simOn()) return; // switched off: nothing to measure until it is turned back on
     const { w, h } = measure();
+    // The page has no size yet (hidden or background tab, window still opening): wait for the
+    // resize observer to call again once it does.
+    if (w < 2 || h < 2) {
+      mark('waitingForSize');
+      return;
+    }
     if (!C || w !== W || h !== H) {
       W = w;
       H = h;
@@ -282,8 +447,12 @@
       canvas.style.height = `${H * SCALE}px`;
       image = ctx.createImageData(W, H);
       build();
+      mark('built');
     } else {
-      paintBarriers();
+      const count = giantIds.length;
+      paintField();
+      // Rebuild if elements appeared or disappeared, so every rectangle keeps exactly one giant.
+      if (rects.length !== count) build();
     }
   }
 
@@ -298,7 +467,9 @@
     colors = {
       fill: [...a, dark ? 40 : 28],
       edge: [...a, dark ? 130 : 110],
-      barrier: [...rgb(muted), 40],
+      giantFill: [...rgb(muted), dark ? 22 : 14],
+      giantEdge: [...rgb(muted), dark ? 110 : 90],
+      field: [...rgb(muted), 0], // debug shading of the chemical field (alpha set per site)
     };
   }
 
@@ -318,16 +489,20 @@
     for (let y = y0; y < y1; y++) {
       for (let x = 0; x < W; x++) {
         const t = grid[(x << YB) | y];
+
         let c = null;
-        if (t !== BG && t !== barrierId) {
+        const i = (x << YB) | y;
+        if (t !== BG) {
           const edge =
             (x > 0 && grid[((x - 1) << YB) | y] !== t) ||
             (x < W - 1 && grid[((x + 1) << YB) | y] !== t) ||
             (y > 0 && grid[(x << YB) | (y - 1)] !== t) ||
             (y < H - 1 && grid[(x << YB) | (y + 1)] !== t);
-          c = edge ? colors.edge : colors.fill;
-        } else if (debug && t === barrierId) {
-          c = colors.barrier;
+          const giant = giantRect.has(t);
+          c = edge ? (giant ? colors.giantEdge : colors.edge) : giant ? colors.giantFill : colors.fill;
+        } else if (debug && field[i] > 0) {
+          c = colors.field;
+          c[3] = Math.round(70 * field[i]);
         }
         const o = (y * W + x) * 4;
         if (c) {
@@ -345,15 +520,32 @@
 
   // ---- Main loop --------------------------------------------------------------------------
   function frame() {
-    for (let i = 0; i < MCS_PER_FRAME; i++) C.timeStep();
-    draw();
+    if (!running) return;
+    mark('firstRaf');
+    if (C) {
+      updateAttractor();
+      mark('firstStepStart');
+      for (let i = 0; i < MCS_PER_FRAME; i++) C.timeStep();
+      mark('firstStepDone');
+      draw();
+      if (!('firstFrame' in timings)) {
+        mark('firstFrame');
+        if (mode === 'debug') console.info('[cpm] startup timings (ms since navigation):', timings);
+      }
+      canvas.style.opacity = '1';
+    }
     requestAnimationFrame(frame);
   }
 
   async function start() {
     CPM = await loadArtistoo();
+    mark('artistooLoaded');
     await document.fonts?.ready;
+    mark('fontsReady');
     readColors();
+    // Watch the content area from the start, so a page that has no size yet still gets set up
+    // as soon as it is laid out.
+    watch([container]);
     sync();
 
     new MutationObserver(readColors).observe(document.documentElement, {
@@ -361,10 +553,52 @@
       attributeFilter: ['data-theme'],
     });
 
-    requestAnimationFrame(frame);
+    // It may have been switched off while the library was loading.
+    if (simOn()) {
+      mark('rafRequested');
+      running = true;
+      requestAnimationFrame(frame);
+    }
   }
 
-  if (mode !== 'off' && !reducedMotion) start();
+  // Point the attractor at the cursor (in lattice coordinates; recomputed every frame so it
+  // follows scrolling too), or switch it off.
+  function updateAttractor() {
+    if (!attractor) return;
+    const on = document.documentElement.dataset.attract === 'on' && pointer !== null;
+    attractor.conf.LAMBDA_ATTRACTIONPOINT[CELL] = on ? ATTRACT_LAMBDA : 0;
+    if (on) {
+      const origin = layer.getBoundingClientRect();
+      attractor.conf.ATTRACTIONPOINT[CELL] = [(pointer![0] - origin.left) / SCALE, (pointer![1] - origin.top) / SCALE];
+    }
+  }
+
+  // Turn the simulation on or off to match data-sim.
+  function applySimState() {
+    if (simOn()) {
+      layer.style.display = '';
+      if (debugLayer) debugLayer.style.display = '';
+      if (!started) {
+        started = true;
+        start();
+      } else if (!running) {
+        sync(); // the layout may have changed while it was off
+        running = true;
+        requestAnimationFrame(frame);
+      }
+    } else {
+      running = false;
+      layer.style.display = 'none';
+      if (debugLayer) debugLayer.style.display = 'none';
+    }
+  }
+
+  if (mode === 'debug') (window as any).cpmTimings = timings;
+  new MutationObserver(applySimState).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-sim'],
+  });
+  applySimState();
 </script>
 
 <style>
@@ -379,5 +613,7 @@
   #cpm-canvas {
     display: block;
     image-rendering: pixelated;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
   }
 </style>

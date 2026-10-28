@@ -8,14 +8,14 @@ const years = [...new Set(pubs.map((p) => p.data.year))].sort((a, b) => b - a);
 ---
 
 <BaseLayout title="Publications" description="Publications and preprints.">
-  <h1>Publications</h1>
-  <p class="page-intro">
+  <h1 data-cpm-group="title">Publications</h1>
+  <p class="page-intro" data-cpm-group="title">
     Peer-reviewed papers and preprints.
   </p>
 
   {
     years.map((year) => (
-      <section>
+      <section class="year-group" data-cpm-barrier>
         <h2 class="year">{year}</h2>
         <ul class="plain-list">
           {pubs
@@ -35,6 +35,20 @@ const years = [...new Set(pubs.map((p) => p.data.year))].sort((a, b) => b - a);
     color: var(--muted);
     border-bottom: 1px solid var(--border);
     padding-bottom: 0.3rem;
-    margin-top: 2rem;
+    margin: 0 0 1rem;
+  }
+
+  /* Each year (heading + papers) is one cell, so the spacing inside it is tight; the large gap
+     (same as between other large elements) only separates the years. */
+  .year-group + .year-group {
+    margin-top: var(--gap-large);
+  }
+
+  .year-group :global(.pub) {
+    margin-bottom: 1.4rem;
+  }
+
+  .year-group :global(.pub:last-child) {
+    margin-bottom: 0;
   }
 </style>

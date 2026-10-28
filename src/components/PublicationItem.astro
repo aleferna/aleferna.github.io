@@ -18,7 +18,7 @@ const linkList = [
 ].filter((link): link is { label: string; href: string } => Boolean(link.href));
 ---
 
-<li class="pub">
+<li class="pub" data-cpm-barrier>
   <div class="title">{title}</div>
   <div class="authors">
     {

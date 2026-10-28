@@ -32,8 +32,8 @@ const projects = (await getProjects()).slice(0, 3);
           </div>
         </section>
 
-        <section class="bio">
-          <p data-cpm-group="intro">
+        <section class="bio" data-cpm-group="intro">
+          <p>
             I am a theoretical biologist interested in the evolution of biological complexity.
             <br /><br />
             Life exists in different levels of organisation, and my current research aims to understand how transitions
@@ -67,6 +67,17 @@ const projects = (await getProjects()).slice(0, 3);
     <!-- Selected publications and recent writing, side by side in the full-width top area. -->
     <div class="feature-row">
       {
+        recentPosts.length > 0 && (
+          <section class="merged recent-writing" data-cpm-barrier>
+            <h2>Recent writing</h2>
+            <PostList posts={recentPosts} />
+            <p class="small more">
+              <a href="/blog/">All posts →</a>
+            </p>
+          </section>
+        )
+      }
+      {
         selectedPubs.length > 0 && (
           <section class="merged selected-pubs" data-cpm-barrier>
             <h2>Selected publications</h2>
@@ -77,17 +88,6 @@ const projects = (await getProjects()).slice(0, 3);
             </ul>
             <p class="small">
               <a href="/publications/">All publications →</a>
-            </p>
-          </section>
-        )
-      }
-      {
-        recentPosts.length > 0 && (
-          <section class="merged recent-writing" data-cpm-barrier>
-            <h2>Recent writing</h2>
-            <PostList posts={recentPosts} />
-            <p class="small more">
-              <a href="/blog/">All posts →</a>
             </p>
           </section>
         )
@@ -174,7 +174,7 @@ const projects = (await getProjects()).slice(0, 3);
   .intro-row {
     display: flex;
     flex-direction: column;
-    gap: calc(3.25rem + 65px);
+    gap: var(--gap-large);
   }
 
   .intro > :last-child {
@@ -202,7 +202,7 @@ const projects = (await getProjects()).slice(0, 3);
     margin-top: 0.6rem;
   }
 
-  @media (min-width: 73rem) {
+  @media (min-width: 79.5rem) {
     .intro-row {
       flex-direction: row;
       align-items: flex-start;
@@ -211,17 +211,19 @@ const projects = (await getProjects()).slice(0, 3);
     .projects-box {
       width: 27.7rem;
       margin-top: 50px;
+      /* A margin (not a relative offset) so the centred layout box accounts for it. */
+      margin-left: 35px;
     }
   }
 
-  /* Selected publications and recent writing: stacked on small screens, side by side from
-     48rem up, with "Selected publications" starting at the right edge of the photo (7rem). The
+  /* Recent writing and selected publications: stacked on small screens, side by side from
+     48rem up, with "Recent writing" starting 25px left of the photo's right edge (7rem). The
      gaps match the spacing between the other large elements. Widths are set here. */
   .feature-row {
     display: flex;
     flex-direction: column;
-    gap: calc(3.25rem + 65px);
-    margin-top: calc(3.25rem + 65px);
+    gap: var(--gap-large);
+    margin-top: var(--gap-large);
   }
 
   .feature-row .merged :global(h2) {
@@ -240,19 +242,24 @@ const projects = (await getProjects()).slice(0, 3);
       padding-left: 7rem;
     }
 
+    .recent-writing {
+      width: 26.8rem;
+      position: relative;
+      left: -25px;
+      top: 15px;
+    }
+
     .selected-pubs {
       width: 29.6rem;
     }
-
-    .recent-writing {
-      width: 26.8rem;
-    }
   }
 
-  /* When both fit on one row (about 1,124px and wider), raise "Recent writing" by 75px. */
-  @media (min-width: 70.25rem) {
-    .recent-writing {
-      margin-top: -75px;
+  /* When both fit on one row (about 1,220px and wider), shift "Selected publications" 45px
+     right and raise it by 20px. */
+  @media (min-width: 76.25rem) {
+    .selected-pubs {
+      margin-left: 45px;
+      margin-top: -20px;
     }
   }
 

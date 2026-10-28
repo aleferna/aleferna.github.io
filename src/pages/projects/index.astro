@@ -6,13 +6,13 @@ const projects = await getProjects();
 ---
 
 <BaseLayout title="Projects" description="Research and software projects.">
-  <h1>Projects</h1>
-  <p class="page-intro">Research directions, software, and side projects.</p>
+  <h1 data-cpm-group="title">Projects</h1>
+  <p class="page-intro" data-cpm-group="title">Research directions, software, and side projects.</p>
 
   <ul class="plain-list projects">
     {
       projects.map((project) => (
-        <li>
+        <li data-cpm-barrier>
           <h2>
             <a href={`/projects/${project.id}/`}>{project.data.title}</a>
           </h2>
@@ -30,13 +30,9 @@ const projects = await getProjects();
 </BaseLayout>
 
 <style>
-  .projects > li {
-    padding: 1.25rem 0;
-    border-top: 1px solid var(--border);
-  }
-
+  /* Each project is one cell, separated by the same large gap as the years elsewhere. */
   .projects > li + li {
-    margin-top: 0;
+    margin-top: var(--gap-large);
   }
 
   .projects h2 {

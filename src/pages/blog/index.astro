@@ -8,12 +8,12 @@ const years = [...new Set(posts.map((p) => p.data.date.getUTCFullYear()))];
 ---
 
 <BaseLayout title="Blog" description="Notes and writing.">
-  <h1>Blog</h1>
-  <p class="page-intro">Notes on research, tools, and things I'm learning.</p>
+  <h1 data-cpm-group="title">Blog</h1>
+  <p class="page-intro" data-cpm-group="title">Notes on research, tools, and things I'm learning.</p>
 
   {
     years.map((year) => (
-      <section>
+      <section class="year-group" data-cpm-barrier>
         <h2 class="year">{year}</h2>
         <PostList posts={posts.filter((p) => p.data.date.getUTCFullYear() === year)} />
       </section>
@@ -25,6 +25,16 @@ const years = [...new Set(posts.map((p) => p.data.date.getUTCFullYear()))];
   .year {
     font-size: 1.1rem;
     color: var(--muted);
-    margin: 2rem 0 0.5rem;
+    margin: 0 0 0.6rem;
+  }
+
+  /* Each year (heading + posts) is one cell: tight spacing inside, the large gap between years. */
+  .year-group + .year-group {
+    margin-top: var(--gap-large);
+  }
+
+  .year-group :global(.posts li) {
+    padding: 0.4rem 0;
+    gap: 1rem;
   }
 </style>

@@ -10,7 +10,7 @@ const hasPdf = Boolean(pdf) && fs.existsSync(path.join(process.cwd(), 'public', 
 ---
 
 <BaseLayout title="CV" description={`Curriculum vitae of ${SITE.name}.`}>
-  <div class="cv-head">
+  <div class="cv-head" data-cpm-group="cv">
     <h1>Curriculum Vitae</h1>
     {
       hasPdf && (
@@ -24,13 +24,13 @@ const hasPdf = Boolean(pdf) && fs.existsSync(path.join(process.cwd(), 'public', 
 
   {
     hasPdf ? (
-      <object class="cv-embed" data={`${pdf}#view=FitH`} type="application/pdf" aria-label="CV (PDF)">
+      <object class="cv-embed" data-cpm-group="cv" data={`${pdf}#view=FitH`} type="application/pdf" aria-label="CV (PDF)">
         <p>
           Your browser can't display the PDF here. <a href={pdf}>Download the CV</a> instead.
         </p>
       </object>
     ) : (
-      <p class="muted">CV coming soon.</p>
+      <p class="muted" data-cpm-group="cv">CV coming soon.</p>
     )
   }
 </BaseLayout>

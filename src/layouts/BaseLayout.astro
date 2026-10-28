@@ -24,6 +24,8 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url);
     <meta name="description" content={description} />
     <link rel="canonical" href={canonical} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Start downloading the background simulation library right away (used by CpmBackground). -->
+    <link rel="preload" href="/vendor/artistoo.min.js" as="script" />
     <meta name="generator" content={Astro.generator} />
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
@@ -39,6 +41,25 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url);
           theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         document.documentElement.dataset.theme = theme;
+
+        // Background simulation on/off: the visitor's choice (toggle in the header), otherwise off
+        // for reduced motion; ?cpm=off always turns it off.
+        let sim;
+        try {
+          sim = localStorage.getItem('sim');
+        } catch {}
+        if (sim !== 'on' && sim !== 'off') {
+          sim = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'on';
+        }
+        if (new URLSearchParams(location.search).get('cpm') === 'off') sim = 'off';
+        document.documentElement.dataset.sim = sim;
+
+        // Cursor attracts the small cells (toggle in the header); off unless switched on.
+        let attract;
+        try {
+          attract = localStorage.getItem('attract');
+        } catch {}
+        document.documentElement.dataset.attract = attract === 'on' ? 'on' : 'off';
       })();
     </script>
   </head>
@@ -74,9 +95,9 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url);
     /* The background simulation is confined to this area, between the top and bottom bars. */
     position: relative;
     flex: 1;
-    padding-top: calc(3.25rem + 65px);
+    padding-top: var(--gap-large);
     /* Same as the gap between large elements (see h2 in global.css). */
-    padding-bottom: calc(3.25rem + 65px);
+    padding-bottom: var(--gap-large);
   }
 
   /* Full-width area above the content column, aligned with the header (see the `top` slot). */

@@ -29,11 +29,68 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
         </svg>
       </button>
+      <button id="sim-toggle" type="button" aria-label="Background animation" aria-pressed="true" title="Turn background animation off">
+        <svg class="icon-sim-on" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <circle cx="8" cy="9" r="4.5"></circle>
+          <circle cx="16.5" cy="8" r="3"></circle>
+          <circle cx="14" cy="17" r="4"></circle>
+        </svg>
+        <svg class="icon-sim-off" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="8" cy="9" r="4.5"></circle>
+          <circle cx="16.5" cy="8" r="3"></circle>
+          <circle cx="14" cy="17" r="4"></circle>
+          <path d="M3 21L21 3"></path>
+        </svg>
+      </button>
+      <button id="attract-toggle" type="button" aria-label="Cursor attracts cells" aria-pressed="false" title="Make the cursor attract cells">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="7"></circle>
+          <circle cx="12" cy="12" r="1.5" fill="currentColor"></circle>
+          <path d="M12 2v3M12 19v3M2 12h3M19 12h3"></path>
+        </svg>
+      </button>
     </nav>
   </div>
 </header>
 
 <script>
+  // Background simulation toggle: flips data-sim on <html> (CpmBackground listens for it) and
+  // remembers the choice.
+  const simButton = document.getElementById('sim-toggle');
+  const syncSimButton = () => {
+    const on = document.documentElement.dataset.sim !== 'off';
+    simButton?.setAttribute('aria-pressed', String(on));
+    simButton?.setAttribute('title', on ? 'Turn background animation off' : 'Turn background animation on');
+  };
+  // Cursor-attractor toggle: flips data-attract on <html>; only usable while the simulation is on.
+  const attractButton = document.getElementById('attract-toggle') as HTMLButtonElement | null;
+  const syncAttractButton = () => {
+    const on = document.documentElement.dataset.attract === 'on';
+    attractButton?.setAttribute('aria-pressed', String(on));
+    attractButton?.setAttribute('title', on ? 'Stop the cursor attracting cells' : 'Make the cursor attract cells');
+    if (attractButton) attractButton.disabled = document.documentElement.dataset.sim === 'off';
+  };
+  syncAttractButton();
+  attractButton?.addEventListener('click', () => {
+    const next = document.documentElement.dataset.attract === 'on' ? 'off' : 'on';
+    document.documentElement.dataset.attract = next;
+    try {
+      localStorage.setItem('attract', next);
+    } catch {}
+    syncAttractButton();
+  });
+
+  syncSimButton();
+  simButton?.addEventListener('click', () => {
+    const next = document.documentElement.dataset.sim === 'off' ? 'on' : 'off';
+    document.documentElement.dataset.sim = next;
+    try {
+      localStorage.setItem('sim', next);
+    } catch {}
+    syncSimButton();
+    syncAttractButton();
+  });
+
   const button = document.getElementById('theme-toggle');
   button?.addEventListener('click', () => {
     const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -101,7 +158,9 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     text-underline-offset: 0.35em;
   }
 
-  #theme-toggle {
+  #theme-toggle,
+  #sim-toggle,
+  #attract-toggle {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -114,7 +173,9 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
     cursor: pointer;
   }
 
-  #theme-toggle:hover {
+  #theme-toggle:hover,
+  #sim-toggle:hover,
+  #attract-toggle:hover {
     color: var(--text);
   }
 
@@ -127,6 +188,28 @@ const isActive = (href: string) => (href === '/' ? path === '/' : path.startsWit
   }
 
   :global([data-theme='dark']) .icon-moon {
+    display: block;
+  }
+
+  #attract-toggle[aria-pressed='true'] {
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  #attract-toggle:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .icon-sim-off {
+    display: none;
+  }
+
+  :global([data-sim='off']) .icon-sim-on {
+    display: none;
+  }
+
+  :global([data-sim='off']) .icon-sim-off {
     display: block;
   }
 </style>
