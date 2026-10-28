@@ -5,8 +5,23 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import SocialLinks from '../components/SocialLinks.astro';
 import PublicationItem from '../components/PublicationItem.astro';
 import PostList from '../components/PostList.astro';
-import { SITE } from '../config';
+import { SITE, SOCIAL } from '../config';
 import { getPosts, getProjects, getPublications } from '../lib/content';
+
+const personData = {
+  '@context': 'https://schema.org',
+  '@type': 'Person',
+  name: SITE.name,
+  alternateName: SITE.alternateNames,
+  url: SITE.url + '/',
+  image: SITE.url + SITE.avatar,
+  email: SITE.email ? `mailto:${SITE.email}` : undefined,
+  jobTitle: SITE.role,
+  description: SITE.description,
+  affiliation: { '@type': 'Organization', name: 'Sainsbury Laboratory, University of Cambridge', url: 'https://www.slcu.cam.ac.uk/' },
+  alumniOf: { '@type': 'CollegeOrUniversity', name: 'University of Porto' },
+  sameAs: Object.values(SOCIAL).filter(Boolean),
+};
 
 const hasAvatar = Boolean(SITE.avatar) && fs.existsSync(path.join(process.cwd(), 'public', SITE.avatar));
 const selectedPubs = (await getPublications()).filter((p) => p.data.featured).slice(0, 4);
@@ -15,6 +30,8 @@ const projects = (await getProjects()).slice(0, 3);
 ---
 
 <BaseLayout>
+  <!-- Structured data for search engines: who this site is about and their other profiles. -->
+  <script is:inline type="application/ld+json" set:html={JSON.stringify(personData)} />
   <!-- Everything on the home page sits in one box that is centred on the page; the pieces
        keep their positions relative to each other inside it. -->
   <div class="layout" slot="top">

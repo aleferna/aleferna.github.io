@@ -3,6 +3,8 @@
 export const SITE = {
   // Full name, shown in the header, page titles, and home page.
   name: 'Alexandre P. Fernandes',
+  // Other forms of your name people might search for (used in search-engine metadata).
+  alternateNames: ['Alexandre Porcher Fernandes', 'Alexandre Fernandes', 'A. P. Fernandes'],
   // Name as it appears in author lists; it is bolded in publications.
   authorName: 'A. P. Fernandes',
   role: 'PhD Student',
@@ -10,13 +12,13 @@ export const SITE = {
   affiliationUrl: 'https://www.slcu.cam.ac.uk/Alexandre-P-Fernandes',
   location: 'Cambridge, UK',
   description:
-    'Alexandre P. Fernandes, PhD student at the Sainsbury Laboratory, University of Cambridge, studying the evolution of multicellularity.',
+    'Alexandre P. Fernandes (Alexandre Porcher Fernandes), theoretical biologist and PhD student at the Sainsbury Laboratory, University of Cambridge, studying the evolution of multicellularity.',
   email: 'alexandre.porcherfernandes@slcu.cam.ac.uk', // leave '' to hide
   // Photo shown next to your name on the home page; hidden until the file exists in /public.
   avatar: '/profile.jpg',
   // Path to your CV PDF inside /public. Replace public/CV.pdf to update it.
   cvPdf: '/CV.pdf',
-  url: 'https://aleferna.github.io',
+  url: 'https://alex-fernandes.com',
 };
 
 // Leave a value as '' to hide that link.
