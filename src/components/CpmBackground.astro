@@ -1,5 +1,6 @@
 ---
-// Cellular Potts model running behind the page. Every "part" of the layout (the innermost
+// Cellular Potts model running behind the page content (inside <main>, so the top and bottom
+// bars are left out). Every "part" of the layout (the innermost
 // block-level elements: paragraphs, headings, list items, images, buttons, ...) is projected
 // onto the lattice as a solid rectangle that cells cannot enter.
 //
@@ -11,6 +12,8 @@
 // Per element:
 //   data-cpm-barrier  treat this element as one rectangle (don't look inside it)
 //   data-cpm-skip     ignore this element and its children
+//   data-cpm-group="name"  elements with the same group name form one rectangle together (the
+//                     smallest rectangle containing all of them), even if they are far apart
 ---
 
 <div id="cpm-layer" aria-hidden="true">
@@ -22,14 +25,23 @@
 
   // ---- Model settings -----------------------------------------------------------------------
   const SCALE = 4; // CSS pixels per lattice site
-  const PAD = 1; // extra lattice sites around each barrier rectangle
+  // Extra lattice sites around each barrier rectangle: content blocks get a wider margin than the
+  // small items in the top/bottom bars and the social links.
+  const PAD = 2;
+  const PAD_SMALL = 1;
+  const SMALL_PAD_SELECTOR = '.social';
   const DENSITY = 0.12; // fraction of the free lattice to fill with cells
-  const MAX_CELLS = 250;
+  const MAX_CELLS = 125;
   const MCS_PER_FRAME = 1;
 
   const BG = 0;
   const BARRIER = 1;
   const CELL = 2;
+
+  // Target cell area (lattice sites) and perimeter: 1.1 × the perimeter of a circle with that
+  // area, with Artistoo's perimeter counted as 3 per unit of boundary length.
+  const AREA = 200;
+  const PERIMETER = 180;
 
   const CONF = {
     torus: [false, false],
@@ -40,15 +52,18 @@
       [0, 0, 20],
       [20, 20, 30],
     ],
-    LAMBDA_V: [0, 0, 30],
-    V: [0, 0, 150],
+    LAMBDA_V: [0, 0, 50],
+    V: [0, 0, AREA],
     LAMBDA_P: [0, 0, 2],
-    P: [0, 0, 150],
-    LAMBDA_ACT: [0, 0, 200],
-    MAX_ACT: [0, 0, 40],
+    P: [0, 0, PERIMETER],
+    // Act model: recently extended pixels carry "activity" that decays over MAX_ACT steps, and
+    // cells favour extending from active regions.
+    LAMBDA_ACT: [0, 0, 300],
+    MAX_ACT: [0, 0, 20],
     ACT_MEAN: 'geometric',
     IS_BARRIER: [false, true, false],
   };
+
 
   // Elements that are always one rectangle (their contents are not inspected).
   const ATOMIC = new Set(['IMG', 'SVG', 'svg', 'OBJECT', 'IFRAME', 'VIDEO', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'PRE', 'TABLE']);
@@ -60,6 +75,8 @@
   const layer = document.getElementById('cpm-layer') as HTMLDivElement;
   const canvas = document.getElementById('cpm-canvas') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d')!;
+  // The element the simulation covers (<main>); layout parts inside it become barriers.
+  const container = layer.parentElement as HTMLElement;
 
   let CPM: any;
   let C: any = null;
@@ -85,13 +102,13 @@
     return d === 'inline' || d.startsWith('inline-') || d === 'ruby';
   }
 
-  function collectRects(el: Element, out: DOMRect[]) {
+  function collectElements(el: Element, out: Element[]) {
     if (el === layer || el === debugLayer || IGNORED.has(el.tagName) || el.hasAttribute('data-cpm-skip')) return;
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') return;
 
-    if (ATOMIC.has(el.tagName) || el.hasAttribute('data-cpm-barrier')) {
-      out.push(el.getBoundingClientRect());
+    if (ATOMIC.has(el.tagName) || el.hasAttribute('data-cpm-barrier') || el.hasAttribute('data-cpm-group')) {
+      out.push(el);
       return;
     }
 
@@ -104,25 +121,77 @@
 
     if (!hasBlockKid && cs.display !== 'contents') {
       // Innermost block (or a stray inline element): one rectangle for the whole part.
-      if (el.textContent?.trim() || kids.length) out.push(el.getBoundingClientRect());
+      if (el.textContent?.trim() || kids.length) out.push(el);
       return;
     }
-    for (const k of kids) collectRects(k, out);
+    for (const k of kids) collectElements(k, out);
+  }
+
+  // Re-measure whenever the page or any barrier element changes size (e.g. when a font finishes
+  // loading and text gets wider without the page itself changing size).
+  let pending = 0;
+  const observed = new Set<Element>();
+  const resizeObserver = new ResizeObserver(() => {
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(sync);
+  });
+
+  function watch(elements: Element[]) {
+    const next = new Set(elements);
+    for (const el of observed) {
+      if (!next.has(el)) {
+        resizeObserver.unobserve(el);
+        observed.delete(el);
+      }
+    }
+    for (const el of next) {
+      if (!observed.has(el)) {
+        resizeObserver.observe(el);
+        observed.add(el);
+      }
+    }
   }
 
   function layoutRects() {
     const origin = layer.getBoundingClientRect();
-    const rects: DOMRect[] = [];
-    collectRects(document.body, rects);
-    return rects
-      .filter((r) => r.width > 0 && r.height > 0)
+    const elements: Element[] = [];
+    collectElements(container, elements);
+    watch([container, ...elements]);
+    const parts = elements
+      .map((el) => ({
+        r: el.getBoundingClientRect(),
+        pad: el.closest(SMALL_PAD_SELECTOR) ? PAD_SMALL : PAD,
+        group: el.getAttribute('data-cpm-group'),
+      }))
+      .filter(({ r }) => r.width > 0 && r.height > 0)
       // Drop elements that sit outside the page (e.g. the off-screen skip link).
-      .filter((r) => r.right > origin.left && r.left < origin.right && r.bottom > origin.top && r.top < origin.bottom)
-      .map((r) => ({
-        x0: Math.max(0, Math.floor((r.left - origin.left) / SCALE) - PAD),
-        y0: Math.max(0, Math.floor((r.top - origin.top) / SCALE) - PAD),
-        x1: Math.min(W - 1, Math.ceil((r.right - origin.left) / SCALE) + PAD - 1),
-        y1: Math.min(H - 1, Math.ceil((r.bottom - origin.top) / SCALE) + PAD - 1),
+      .filter(({ r }) => r.right > origin.left && r.left < origin.right && r.bottom > origin.top && r.top < origin.bottom);
+
+    // Merge each data-cpm-group into the bounding box of its members.
+    const merged: { r: { left: number; top: number; right: number; bottom: number }; pad: number }[] = [];
+    const groups = new Map<string, (typeof merged)[number]>();
+    for (const { r, pad, group } of parts) {
+      const box = { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+      if (!group) {
+        merged.push({ r: box, pad });
+      } else if (!groups.has(group)) {
+        const entry = { r: box, pad };
+        groups.set(group, entry);
+        merged.push(entry);
+      } else {
+        const g = groups.get(group)!.r;
+        g.left = Math.min(g.left, box.left);
+        g.top = Math.min(g.top, box.top);
+        g.right = Math.max(g.right, box.right);
+        g.bottom = Math.max(g.bottom, box.bottom);
+      }
+    }
+
+    return merged.map(({ r, pad }) => ({
+        x0: Math.max(0, Math.floor((r.left - origin.left) / SCALE) - pad),
+        y0: Math.max(0, Math.floor((r.top - origin.top) / SCALE) - pad),
+        x1: Math.min(W - 1, Math.ceil((r.right - origin.left) / SCALE) + pad - 1),
+        y1: Math.min(H - 1, Math.ceil((r.bottom - origin.top) / SCALE) + pad - 1),
       }));
   }
 
@@ -139,7 +208,7 @@
       debugLayer = document.createElement('div');
       debugLayer.setAttribute('aria-hidden', 'true');
       debugLayer.style.cssText = 'position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:1000';
-      document.body.appendChild(debugLayer);
+      container.appendChild(debugLayer);
     }
     debugLayer.replaceChildren(
       ...rects.map((r) => {
@@ -197,8 +266,8 @@
 
   function measure() {
     return {
-      w: Math.ceil(document.documentElement.clientWidth / SCALE),
-      h: Math.ceil(document.body.getBoundingClientRect().height / SCALE),
+      w: Math.ceil(container.clientWidth / SCALE),
+      h: Math.ceil(container.getBoundingClientRect().height / SCALE),
     };
   }
 
@@ -286,12 +355,6 @@
     await document.fonts?.ready;
     readColors();
     sync();
-
-    let pending = 0;
-    new ResizeObserver(() => {
-      cancelAnimationFrame(pending);
-      pending = requestAnimationFrame(sync);
-    }).observe(document.body);
 
     new MutationObserver(readColors).observe(document.documentElement, {
       attributes: true,

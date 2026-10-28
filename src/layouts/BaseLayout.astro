@@ -45,11 +45,20 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url);
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
     <Header />
-    <main id="main" class="container">
-      <slot />
+    <main id="main">
+      <CpmBackground />
+      {
+        Astro.slots.has('top') && (
+          <div class="page-top">
+            <slot name="top" />
+          </div>
+        )
+      }
+      <div class="container">
+        <slot />
+      </div>
     </main>
     <Footer />
-    <CpmBackground />
   </body>
 </html>
 
@@ -62,9 +71,17 @@ const canonical = new URL(Astro.url.pathname, Astro.site ?? SITE.url);
   }
 
   main {
+    /* The background simulation is confined to this area, between the top and bottom bars. */
+    position: relative;
     flex: 1;
-    padding-top: 2.5rem;
-    padding-bottom: 4rem;
+    padding-top: calc(3.25rem + 65px);
+    /* Same as the gap between large elements (see h2 in global.css). */
+    padding-bottom: calc(3.25rem + 65px);
+  }
+
+  /* Full-width area above the content column, aligned with the header (see the `top` slot). */
+  .page-top {
+    padding: 0 1.25rem;
   }
 
   .skip-link {

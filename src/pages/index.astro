@@ -6,70 +6,104 @@ import SocialLinks from '../components/SocialLinks.astro';
 import PublicationItem from '../components/PublicationItem.astro';
 import PostList from '../components/PostList.astro';
 import { SITE } from '../config';
-import { getPosts, getPublications } from '../lib/content';
+import { getPosts, getProjects, getPublications } from '../lib/content';
 
 const hasAvatar = Boolean(SITE.avatar) && fs.existsSync(path.join(process.cwd(), 'public', SITE.avatar));
 const selectedPubs = (await getPublications()).filter((p) => p.data.featured).slice(0, 4);
 const recentPosts = (await getPosts()).slice(0, 3);
+const projects = (await getProjects()).slice(0, 3);
 ---
 
 <BaseLayout>
-  <section class="hero">
-    {hasAvatar && <img class="avatar" src={SITE.avatar} alt={`Photo of ${SITE.name}`} width="112" height="112" />}
-    <div>
-      <h1>{SITE.name}</h1>
-      <p class="role">
-        {SITE.role} · <a href={SITE.affiliationUrl}>{SITE.affiliation}</a>
-        {SITE.location && <span class="muted"> · {SITE.location}</span>}
-      </p>
+  <!-- Everything on the home page sits in one box that is centred on the page; the pieces
+       keep their positions relative to each other inside it. -->
+  <div class="layout" slot="top">
+    <!-- Photo/name and bio on the left, projects in a separate box to their right. -->
+    <div class="intro-row">
+      <div class="intro">
+        <section class="hero" data-cpm-group="intro">
+          {hasAvatar && <img class="avatar" src={SITE.avatar} alt={`Photo of ${SITE.name}`} width="112" height="112" />}
+          <div>
+            <h1>{SITE.name}</h1>
+            <p class="role">
+              {SITE.role} · <a href={SITE.affiliationUrl}>{SITE.affiliation}</a>
+              {SITE.location && <span class="muted"> · {SITE.location}</span>}
+            </p>
+          </div>
+        </section>
+
+        <section class="bio">
+          <p data-cpm-group="intro">
+            I am a theoretical biologist interested in the evolution of biological complexity.
+            <br /><br />
+            Life exists in different levels of organisation, and my current research aims to understand how transitions
+            between these levels happen — i.e., how molecules organise to form cells, how cells organise to
+            form organisms, how organisms organise to form populations, and so on.
+          </p>
+          <SocialLinks />
+        </section>
+      </div>
+
+      {
+        projects.length > 0 && (
+          <section class="merged projects-box" data-cpm-barrier>
+            <h2>Projects</h2>
+            <ul class="plain-list project-list">
+              {projects.map((project) => (
+                <li>
+                  <a href={`/projects/${project.id}/`}>{project.data.title}</a>
+                  <span class="muted small">{project.data.description}</span>
+                </li>
+              ))}
+            </ul>
+            <p class="small more">
+              <a href="/projects/">All projects →</a>
+            </p>
+          </section>
+        )
+      }
     </div>
-  </section>
 
-  <section class="bio">
-    <p>
-      I am a theoretical biologist interested in the evolution of biological complexity.
-      <br /><br />
-      Life exists in different levels of organisation, and my current research aims to understand how transitions
-      between these levels happen — i.e., how molecules organise to form cells, how cells organise to
-      form organisms, how organisms organise to form populations, and so on.
-    </p>
-    <SocialLinks />
-  </section>
-
-  {
-    selectedPubs.length > 0 && (
-      <section>
-        <h2>Selected publications</h2>
-        <ul class="plain-list">
-          {selectedPubs.map((pub) => (
-            <PublicationItem pub={pub} />
-          ))}
-        </ul>
-        <p class="small">
-          <a href="/publications/">All publications →</a>
-        </p>
-      </section>
-    )
-  }
-
-  {
-    recentPosts.length > 0 && (
-      <section>
-        <h2>Recent writing</h2>
-        <PostList posts={recentPosts} />
-        <p class="small more">
-          <a href="/blog/">All posts →</a>
-        </p>
-      </section>
-    )
-  }
+    <!-- Selected publications and recent writing, side by side in the full-width top area. -->
+    <div class="feature-row">
+      {
+        selectedPubs.length > 0 && (
+          <section class="merged selected-pubs" data-cpm-barrier>
+            <h2>Selected publications</h2>
+            <ul class="plain-list">
+              {selectedPubs.map((pub) => (
+                <PublicationItem pub={pub} />
+              ))}
+            </ul>
+            <p class="small">
+              <a href="/publications/">All publications →</a>
+            </p>
+          </section>
+        )
+      }
+      {
+        recentPosts.length > 0 && (
+          <section class="merged recent-writing" data-cpm-barrier>
+            <h2>Recent writing</h2>
+            <PostList posts={recentPosts} />
+            <p class="small more">
+              <a href="/blog/">All posts →</a>
+            </p>
+          </section>
+        )
+      }
+    </div>
+  </div>
 </BaseLayout>
 
 <style>
   .hero {
+    /* Shrink to its contents so it forms one tight barrier rectangle in the background simulation. */
+    width: fit-content;
     display: flex;
     align-items: center;
-    gap: 1.5rem;
+    gap: 2rem;
+    /* Tighter: the photo/name block and the bio form one barrier (data-cpm-group="intro"). */
     margin-bottom: 1.5rem;
   }
 
@@ -86,16 +120,140 @@ const recentPosts = (await getPosts()).slice(0, 3);
     color: var(--muted);
   }
 
+  /* The bio sits in the full-width top area under the photo; keep the line length of the
+     content column. */
   .bio {
-    margin-bottom: 1rem;
+    max-width: 39.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .bio p {
+    margin-bottom: 0;
   }
 
   .bio :global(.social) {
     margin-top: 1.25rem;
   }
 
+  /* Sections merged into one barrier rectangle (data-cpm-barrier) keep the original, tighter
+     spacing inside; the wider spacing only applies between barrier elements. */
+  .merged h2 {
+    margin-bottom: 1rem;
+  }
+
+  .merged :global(.pub) {
+    margin-bottom: 1.4rem;
+  }
+
+  .merged :global(.pub + .pub) {
+    margin-top: 0.3rem;
+  }
+
+  .merged :global(.pub .links) {
+    gap: 0.5rem;
+    margin-top: 0.35rem;
+  }
+
+  .merged :global(.posts li) {
+    padding: 0.4rem 0;
+    gap: 1rem;
+  }
+
   .more {
     margin-top: 0.75rem;
+  }
+
+  .layout {
+    width: fit-content;
+    max-width: 100%;
+    margin-inline: auto;
+  }
+
+  /* Intro (photo/name, bio, socials) and the projects box: stacked on small screens, side by
+     side once both fit, with the usual large gap between them. */
+  .intro-row {
+    display: flex;
+    flex-direction: column;
+    gap: calc(3.25rem + 65px);
+  }
+
+  .intro > :last-child {
+    margin-bottom: 0;
+  }
+
+  .projects-box {
+    max-width: 39.5rem;
+  }
+
+  .projects-box :global(h2) {
+    margin-top: 0;
+  }
+
+  .projects-box > :last-child {
+    margin-bottom: 0;
+  }
+
+  .project-list li {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .project-list li + li {
+    margin-top: 0.6rem;
+  }
+
+  @media (min-width: 73rem) {
+    .intro-row {
+      flex-direction: row;
+      align-items: flex-start;
+    }
+
+    .projects-box {
+      width: 27.7rem;
+      margin-top: 50px;
+    }
+  }
+
+  /* Selected publications and recent writing: stacked on small screens, side by side from
+     48rem up, with "Selected publications" starting at the right edge of the photo (7rem). The
+     gaps match the spacing between the other large elements. Widths are set here. */
+  .feature-row {
+    display: flex;
+    flex-direction: column;
+    gap: calc(3.25rem + 65px);
+    margin-top: calc(3.25rem + 65px);
+  }
+
+  .feature-row .merged :global(h2) {
+    margin-top: 0;
+  }
+
+  .feature-row .merged > :last-child {
+    margin-bottom: 0;
+  }
+
+  @media (min-width: 48rem) {
+    .feature-row {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      padding-left: 7rem;
+    }
+
+    .selected-pubs {
+      width: 29.6rem;
+    }
+
+    .recent-writing {
+      width: 26.8rem;
+    }
+  }
+
+  /* When both fit on one row (about 1,124px and wider), raise "Recent writing" by 75px. */
+  @media (min-width: 70.25rem) {
+    .recent-writing {
+      margin-top: -75px;
+    }
   }
 
   @media (max-width: 480px) {
